@@ -1,0 +1,123 @@
+﻿@page "/employees/edit/{employeeId:int}"
+@inject IDbContextFactory<EmployeeManagerDbContext> ContextFactory
+@inject NavigationManager NavigationManager
+@inject StateContainer StateContainer
+
+<PageTitle>Edit Employee</PageTitle>
+
+<h1>Edit Employee</h1>
+
+@if (Employee is null && !IsBusy)
+{
+    <div class="alert alert-danger">The employee with id @EmployeeId was not found.</div>
+}
+else
+{
+    <EmployeeForm Employee="@Employee" 
+        IsBusy="@IsBusy"
+        Departments="@Departments"
+        IsEdit="true"
+        OnSubmit="@HandleSubmit"
+        OnCancel="@NavigateToEmployeeOverView"/>
+}
+
+@if (SuccessMessage is not null)
+{
+    <br />
+    <div class="alert alert-success">@SuccessMessage</div>
+}
+
+@if (ErrorMessage is not null)
+{
+    <br />
+    <div class="alert alert-danger">@ErrorMessage</div>
+}
+
+@code {
+
+    [Parameter]
+    public int? EmployeeId { get; set; }
+    private Employee? Employee { get; set; }
+    private Department[]? Departments { get; set; }
+    public bool IsBusy { get; set; }
+    private string? SuccessMessage { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        IsBusy = true;
+
+        try
+        {
+            using var context = ContextFactory.CreateDbContext();
+
+            Departments = await context.Departments
+                                    .AsNoTracking()
+                                    .OrderBy(d => d.Name)
+                                    .ToArrayAsync();
+
+            Employee = await context.Employees
+                                    .AsNoTracking()
+                                    .FirstOrDefaultAsync(emp => emp.Id == EmployeeId);
+
+
+        }
+        catch (Exception)
+        {
+
+            throw;
+        }
+
+        IsBusy = false;
+
+    }
+
+    private async Task HandleSubmit(bool isValid)
+    {
+        if (Employee is null || IsBusy || !isValid)
+        {
+            ErrorMessage = null;
+            return;
+        }
+
+        IsBusy = true;
+
+        try
+        {
+            if(Employee is not null)
+            {
+                using var context = ContextFactory.CreateDbContext();
+
+                context.Update(Employee);
+
+                await context.SaveChangesAsync();
+
+                SuccessMessage = $"Employee {Employee.FirstName} {Employee.LastName} was updated successfully.";
+
+                ErrorMessage = null;
+
+                NavigateToEmployeeOverView();
+
+            }
+        }
+        catch(DbUpdateConcurrencyException)
+        {
+            ErrorMessage = $"Data was modified by another user. Please reload current page.";
+        }
+        catch(Exception ex)
+        {
+            ErrorMessage = $"Error while saving emplyee : {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private void NavigateToEmployeeOverView()
+    {
+        NavigationManager.NavigateTo($"/employees/list/{StateContainer.EmployeeOverviewPage}");
+    }
+
+
+}
